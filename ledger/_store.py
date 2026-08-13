@@ -1,3 +1,4 @@
+import hashlib
 import json
 import re
 import uuid
@@ -9,9 +10,15 @@ DATA_ROOT = HUB_DIR / "data" / "projects"
 
 
 def sanitize_project_path(path_str):
-    """把项目文件夹路径变成安全的目录名。规则照抄 Claude Code 自己
-    ~/.claude/projects/ 底下用的那套：非字母数字字符全部换成短横线。"""
-    return re.sub(r"[^a-zA-Z0-9]", "-", str(Path(path_str).resolve()))
+    """把项目文件夹路径变成安全的目录名。可读前缀部分照抄 Claude Code 自己
+    ~/.claude/projects/ 底下用的那套（非字母数字字符全部换成短横线），但这个规则
+    对中文之类的非 ASCII 字符没有区分度——不同的中文项目名可能被压成同一串短横线，
+    数据会撞在一起。所以额外加一段基于完整原始路径算出来的短 hash 后缀保证唯一性，
+    可读前缀负责"人眼能不能看出个大概"，hash 后缀负责"绝对不会撞"，两者分工。"""
+    resolved = str(Path(path_str).resolve())
+    readable = re.sub(r"[^a-zA-Z0-9]", "-", resolved)
+    digest = hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:8]
+    return f"{readable}-{digest}"
 
 
 def events_file_for(project_path=None):
